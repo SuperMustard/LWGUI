@@ -9,6 +9,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
+using System.Text.RegularExpressions;
 
 namespace LWGUI
 {
@@ -203,7 +204,10 @@ namespace LWGUI
 		public static void SetGroupFolding(Object material, string group, bool isFolding)
 		{
 			InitPoolPerMaterial(material);
-			_groups[material][group] = isFolding;
+			if (_groups[material].ContainsKey(group))
+				_groups[material][group] = isFolding;
+			else
+				_groups[material].Add(group, isFolding);
 		}
 		
 		public static bool GetGroupFolding(Object material, string group)
@@ -250,11 +254,18 @@ namespace LWGUI
 					if (group.Contains(prefix))
 					{
 						string suffix = group.Substring(prefix.Length, group.Length - prefix.Length).ToUpperInvariant();
-						if (_keywords[material].ContainsKey(suffix))
+						string[] suffixSplit = suffix.Split('.');
+						bool isKeywordActive = false;
+						foreach (var suf in suffixSplit)
 						{
-							// visible when keyword is activated and group is not folding 
-							return _keywords[material][suffix] && !_groups[material][prefix];
+							if (_keywords[material].ContainsKey(suf))
+							{
+								isKeywordActive = _keywords[material][suf];
+								if (isKeywordActive) break;
+							}
 						}
+						return isKeywordActive && !_groups[material][prefix];
+
 					}
 				}
 				return false;
@@ -265,7 +276,11 @@ namespace LWGUI
 		{
 			if (string.IsNullOrEmpty(keyword) || keyword == "_") return;
 			InitPoolPerMaterial(material);
-			_keywords[material][keyword] = isDisplay;
+
+			if (_keywords[material].ContainsKey(keyword))
+				_keywords[material][keyword] = isDisplay;
+			else
+				_keywords[material].Add(keyword, isDisplay);
 		}
     }
 
@@ -523,6 +538,8 @@ namespace LWGUI
 	/// </summary>
 	internal class Helper
     {
+		private static Regex passMatchRegex = new Regex("^___");
+
 #region Engine Misc
 
 		public static void ObsoleteWarning(string obsoleteStr, string newStr)
@@ -561,7 +578,6 @@ namespace LWGUI
 		public static void SetShaderKeyWord(Object[] materials, string keyWord, bool isEnable)
 		{
 			if (string.IsNullOrEmpty(keyWord) || string.IsNullOrEmpty(keyWord)) return;
-			
 			foreach (Material m in materials)
 			{
 				// delete "_" keywords
@@ -573,14 +589,31 @@ namespace LWGUI
 					}
 					continue;
 				}
-                
-				if (m.IsKeywordEnabled(keyWord))
+
+				var result = passMatchRegex.Match(keyWord);
+
+				if (!result.Success)
 				{
-					if (!isEnable) m.DisableKeyword(keyWord);
+					if (m.IsKeywordEnabled(keyWord))
+					{
+						if (!isEnable) m.DisableKeyword(keyWord);
+					}
+					else
+					{
+						if (isEnable) m.EnableKeyword(keyWord);
+					}
 				}
 				else
-				{
-					if (isEnable) m.EnableKeyword(keyWord);
+                {
+					string passKeyWord = keyWord.Remove(0, 3);
+					if (m.GetShaderPassEnabled(passKeyWord))
+                    {
+						if (!isEnable) m.SetShaderPassEnabled(passKeyWord, false);
+                    }
+					else
+                    {
+						if (isEnable) m.SetShaderPassEnabled(passKeyWord, true);
+                    }
 				}
 			}
 		}
@@ -773,27 +806,27 @@ namespace LWGUI
 		private static Texture _logo = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath("26b9d845eb7b1a747bf04dc84e5bcc2c"));
 		public static void DrawLogo()
 		{
-			var logoRect = EditorGUILayout.GetControlRect(false, _logo.height);
-			var w = logoRect.width;
-			logoRect.xMin += w * 0.5f - _logo.width * 0.5f;
-			logoRect.xMax -= w * 0.5f - _logo.width * 0.5f;
+			//var logoRect = EditorGUILayout.GetControlRect(false, _logo.height);
+			//var w = logoRect.width;
+			//logoRect.xMin += w * 0.5f - _logo.width * 0.5f;
+			//logoRect.xMax -= w * 0.5f - _logo.width * 0.5f;
 
-			if (EditorGUIUtility.currentViewWidth >= logoRect.width)
-			{
-				var c = GUI.color;
-				GUI.color = new Color(c.r, c.g, c.b, 0.4f);
-				if (logoRect.Contains(Event.current.mousePosition))
-				{
-					GUI.color = new Color(c.r, c.g, c.b, 0.8f);
-					if (Event.current.type == UnityEngine.EventType.MouseDown)
-						Application.OpenURL("https://github.com/JasonMa0012/LWGUI");
-				}
-				GUI.DrawTexture(logoRect, _logo);
-				GUI.color = c;
-				GUI.Label(logoRect, new GUIContent(String.Empty, "LWGUI (Light Weight Shader GUI)\n\n"
-													 + "A Lightweight, Flexible, Powerful Unity Shader GUI system.\n\n"
-													 + "Copyright (c) Jason Ma"));
-			}
+			//if (EditorGUIUtility.currentViewWidth >= logoRect.width)
+			//{
+			//	var c = GUI.color;
+			//	GUI.color = new Color(c.r, c.g, c.b, 0.4f);
+			//	if (logoRect.Contains(Event.current.mousePosition))
+			//	{
+			//		GUI.color = new Color(c.r, c.g, c.b, 0.8f);
+			//		if (Event.current.type == UnityEngine.EventType.MouseDown)
+			//			Application.OpenURL("https://github.com/JasonMa0012/LWGUI");
+			//	}
+			//	GUI.DrawTexture(logoRect, _logo);
+			//	GUI.color = c;
+			//	GUI.Label(logoRect, new GUIContent(String.Empty, "LWGUI (Light Weight Shader GUI)\n\n"
+			//										 + "A Lightweight, Flexible, Powerful Unity Shader GUI system.\n\n"
+			//										 + "Copyright (c) Jason Ma"));
+			//}
 		}
 
 		private static readonly int s_TextFieldHash = "EditorTextField".GetHashCode();
